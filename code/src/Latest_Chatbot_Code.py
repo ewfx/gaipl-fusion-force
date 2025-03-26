@@ -1,4 +1,5 @@
 import os
+import shutil  # For copying files
 import pandas as pd
 import chromadb
 import google.generativeai as genai
@@ -46,6 +47,22 @@ FEW_SHOT_EXAMPLES = [
     {"query": "What could be the action or recommendation for Server crash due to high CPU usage",
      "answer": "Action - Investigate running processes consuming excessive CPU. Optimize processes and monitor the system regularly. Recommendation- Identify resource-hogging processes and either optimize them or distribute the load across additional servers. Implement alerting thresholds for CPU usage to catch high usage early."}
 ]
+
+# Function to copy a file
+def copy_file(source_path, destination_path):
+    try:
+        if not os.path.exists(source_path):
+            return f"Error: The source file at {source_path} does not exist."
+
+        if os.path.exists(destination_path):
+            return f"Error: A file already exists at the destination path: {destination_path}"
+
+        shutil.copy2(source_path, destination_path)
+        return "Successfully completed: File copied successfully."
+    except Exception as e:
+        logger.error(f"Error copying file from {source_path} to {destination_path}")
+        logger.error(traceback.format_exc())
+        return f"Error occurred while copying the file: {e}"
 
 # Extracts text from all Excel files in a given directory
 def extract_excel_content(directory):
@@ -109,6 +126,10 @@ def generate_response(query):
 
     try:
         response = model.generate_content(prompt)
+        # Check if the response includes file copying instruction
+        if "Copy file" in response.text:
+            return f"{response.text} Please provide the source and destination file paths."
+
         return response.text if hasattr(response, 'text') else "Error generating response."
     except Exception as e:
         logger.error(f"Error generating response from Gemini: {e}")
@@ -132,6 +153,17 @@ def ask():
         logger.error(f"Error processing query: {user_query}")
         logger.error(traceback.format_exc())
         return jsonify({"error": "An error occurred while processing the request"}), 500  # Internal Server Error
+
+@app.route('/copy-file', methods=['POST'])
+def copy_file_route():
+    source_file = request.form.get('source_file')
+    destination_file = request.form.get('destination_file')
+
+    if not source_file or not destination_file:
+        return jsonify({"error": "Both source and destination file paths are required."}), 400
+
+    result = copy_file(source_file, destination_file)
+    return jsonify({"message": result})
 
 if __name__ == "__main__":
     excel_directory = r"C://Users//snrah//PycharmProjects//gaipl-fusion-force//code//src//Dataset"  # Change to your directory
